@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>Slip Builder</title>
+  <style>
+:root {
+  --bg: #0b0f14; --panel: #131a22; --panel2: #1a232e; --line: #243040;
+  --text: #e8eef5; --muted: #8b9aab; --accent: #22c55e; --warn: #f59e0b; --bad: #ef4444;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+body { padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px); }
+
+.top, main { max-width: 640px; margin: 0 auto; padding: 16px; }
+h1 { font-size: 1.25rem; margin: 4px 0 14px; letter-spacing: .02em; }
+
+.controls { display: grid; grid-template-columns: 1fr; gap: 10px; }
+@media (min-width: 520px) { .controls { grid-template-columns: 1fr 1fr; } .toggle { grid-column: 1 / -1; } }
+
+label { display: flex; flex-direction: column; gap: 6px; font-size: .78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px;
+  padding: 12px; font-size: 1rem; text-transform: none; letter-spacing: 0; }
+select:focus-visible, .toggle input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.toggle { flex-direction: row; align-items: center; justify-content: space-between; position: relative;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px;
+  color: var(--text); text-transform: none; letter-spacing: 0; font-size: .95rem; cursor: pointer; }
+.toggle input { position: absolute; opacity: 0; inset: 0; cursor: pointer; }
+.track { width: 44px; height: 26px; border-radius: 13px; background: var(--line); position: relative; flex: none; transition: background .2s; }
+.track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .2s; }
+.toggle input:checked + .track { background: var(--accent); }
+.toggle input:checked + .track::after { transform: translateX(18px); }
+
+.slip { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.state { padding: 28px 16px; text-align: center; color: var(--muted); }
+.state.error { color: var(--bad); }
+
+.slip-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; background: var(--panel2); border-bottom: 1px solid var(--line); }
+.slip-head .label { font-size: .78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.slip-head .total { font-size: 1.6rem; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+
+.leg { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.leg .match { font-weight: 600; }
+.leg .meta { grid-column: 1; color: var(--muted); font-size: .8rem; }
+.leg .pick { grid-column: 1; display: inline-block; margin-top: 4px; font-size: .85rem; color: var(--accent); }
+.leg .odds { grid-column: 2; grid-row: 1 / span 3; align-self: center; background: var(--bg); border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.code-slot { padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.code-slot .label { font-size: .78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.code-box { display: flex; justify-content: space-between; align-items: center; gap: 10px; border: 1px dashed var(--line);
+  border-radius: 10px; padding: 12px; min-height: 52px; }
+.code-box .code { font: 700 1.3rem ui-monospace, Menlo, monospace; letter-spacing: .12em; color: var(--text); }
+.code-box.off { color: var(--muted); font-size: .9rem; }
+.code-box.err { color: var(--warn); font-size: .9rem; border-color: var(--warn); }
+button.copy { background: var(--accent); color: #04110a; border: 0; border-radius: 8px; padding: 8px 14px; font-weight: 700; cursor: pointer; }
+.foot { padding: 0 16px 14px; color: var(--muted); font-size: .75rem; }
+</style>
+</head>
+<body>
+  <header class="top">
+    <h1>Slip Builder</h1>
+    <section class="controls" aria-label="Filters">
+      <label>Continent
+        <select id="continent"><option value="all">All continents</option></select>
+      </label>
+      <label>League
+        <select id="league"><option value="all">All leagues</option></select>
+      </label>
+      <label>Ticket type
+        <select id="ticketType">
+          <option value="2odds">2 odds</option>
+          <option value="3odds">3 odds</option>
+        </select>
+      </label>
+      <label class="toggle">
+        <span>Generate SportyBet Booking Code</span>
+        <input type="checkbox" id="booking" role="switch">
+        <i class="track" aria-hidden="true"></i>
+      </label>
+    </section>
+  </header>
+
+  <main>
+    <article class="slip" id="slip" aria-live="polite">
+      <div class="state">Loading today’s picks…</div>
+    </article>
+  </main>
+
+  <script>
+// Plain JS dashboard: loads /api/predictions, renders the slip, optionally requests a SportyBet code.
+const $ = (id) => document.getElementById(id);
+const el = { continent: $("continent"), league: $("league"), ticketType: $("ticketType"), booking: $("booking"), slip: $("slip") };
+
+let loadSeq = 0; // ignore out-of-order responses
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function fillSelect(select, values, allLabel, current) {
+  select.innerHTML = `<option value="all">${allLabel}</option>` + values.map((v) => `<option>${esc(v)}</option>`).join("");
+  select.value = values.includes(current) ? current : "all";
+}
+
+async function load() {
+  const seq = ++loadSeq;
+  el.slip.innerHTML = `<div class="state">Building your slip…</div>`;
+  const params = new URLSearchParams({ continent: el.continent.value, league: el.league.value, ticketType: el.ticketType.value });
+  try {
+    const res = await fetch(`/api/predictions?${params}`);
+    const data = await res.json();
+    if (seq !== loadSeq) return;
+    if (!res.ok) throw new Error(data.error || "Request failed");
+
+    fillSelect(el.continent, data.filters.continents, "All continents", el.continent.value);
+    fillSelect(el.league, data.filters.leagues, "All leagues", el.league.value);
+    render(data);
+  } catch (e) {
+    if (seq === loadSeq) el.slip.innerHTML = `<div class="state error">${esc(e.message)}</div>`;
+  }
+}
+
+function render(data) {
+  if (!data.slip) {
+    el.slip.innerHTML = `<div class="state">No ${data.ticketType === "2odds" ? "2" : "3"}-odds combination fits these filters
+      (${data.matchesConsidered} matches considered). Try a wider continent or league.</div>`;
+    return;
+  }
+  const { legs, totalOdds, window: w } = data.slip;
+  el.slip.innerHTML = `
+    <div class="slip-head">
+      <div><div class="label">${legs.length}-leg ${data.ticketType === "2odds" ? "2" : "3"} odds slip</div></div>
+      <div class="total">${totalOdds.toFixed(2)}</div>
+    </div>
+    ${legs.map((l) => `
+      <div class="leg">
+        <div class="match">${esc(l.match)}</div>
+        <div class="meta">${esc(l.league)}${l.continent ? " · " + esc(l.continent) : ""}</div>
+        <span class="pick">${esc(l.prediction)}</span>
+        <div class="odds">${l.odds.toFixed(2)}</div>
+      </div>`).join("")}
+    <div class="code-slot">
+      <div class="label">SportyBet booking code</div>
+      <div class="code-box off" id="codeBox">Toggle is off</div>
+    </div>
+    <div class="foot">Target window ${w[0].toFixed(2)}–${w[1].toFixed(2)}. Odds are implied probabilities, not guarantees.</div>`;
+
+  if (el.booking.checked) requestCode(legs);
+}
+
+async function requestCode(legs) {
+  const box = $("codeBox");
+  if (!box) return;
+  box.className = "code-box off";
+  box.textContent = "Generating code…";
+  const seq = loadSeq;
+  try {
+    const res = await fetch("/api/booking", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ legs: legs.map((l) => ({ match: l.match, prediction: l.prediction })) }),
+    });
+    const out = await res.json();
+    if (seq !== loadSeq) return;
+    if (out.ok) {
+      box.className = "code-box";
+      box.innerHTML = `<span class="code">${esc(out.code)}</span><button class="copy" type="button">Copy</button>`;
+      box.querySelector("button").onclick = (ev) => {
+        navigator.clipboard?.writeText(out.code);
+        ev.target.textContent = "Copied";
+      };
+    } else {
+      const extra = out.unmatched?.length ? " Unmatched: " + out.unmatched.map((u) => u.match).join(", ") + "." : "";
+      box.className = "code-box err";
+      box.textContent = (out.reason || "Could not create a code.") + extra;
+    }
+  } catch {
+    box.className = "code-box err";
+    box.textContent = "Could not reach the booking service.";
+  }
+}
+
+el.continent.addEventListener("change", () => { el.league.value = "all"; load(); });
+el.league.addEventListener("change", load);
+el.ticketType.addEventListener("change", load);
+el.booking.addEventListener("change", load);
+load();
+</script>
+</body>
+</html>
