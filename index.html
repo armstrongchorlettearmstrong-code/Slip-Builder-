@@ -59,6 +59,7 @@ select:focus-visible, .toggle input:focus-visible + .track { outline: 2px solid 
 .code-box.off { color: var(--muted); font-size: .9rem; }
 .code-box.err { color: var(--warn); font-size: .9rem; border-color: var(--warn); }
 button.copy { background: var(--accent); color: #04110a; border: 0; border-radius: 8px; padding: 8px 14px; font-weight: 700; cursor: pointer; }
+.leg .ai { grid-column: 1; margin-top: 4px; font-size: .78rem; color: var(--muted); }
 .foot { padding: 0 16px 14px; color: var(--muted); font-size: .75rem; }
 </style>
 </head>
@@ -79,6 +80,11 @@ button.copy { background: var(--accent); color: #04110a; border: 0; border-radiu
         </select>
       </label>
       <label class="toggle">
+        <span>AI analysis (Gemini)</span>
+        <input type="checkbox" id="ai" role="switch" checked>
+        <i class="track" aria-hidden="true"></i>
+      </label>
+      <label class="toggle">
         <span>Generate SportyBet Booking Code</span>
         <input type="checkbox" id="booking" role="switch">
         <i class="track" aria-hidden="true"></i>
@@ -95,7 +101,7 @@ button.copy { background: var(--accent); color: #04110a; border: 0; border-radiu
   <script>
 // Plain JS dashboard: loads /api/predictions, renders the slip, optionally requests a SportyBet code.
 const $ = (id) => document.getElementById(id);
-const el = { continent: $("continent"), league: $("league"), ticketType: $("ticketType"), booking: $("booking"), slip: $("slip") };
+const el = { continent: $("continent"), league: $("league"), ticketType: $("ticketType"), booking: $("booking"), ai: $("ai"), slip: $("slip") };
 
 let loadSeq = 0; // ignore out-of-order responses
 
@@ -111,7 +117,7 @@ function fillSelect(select, values, allLabel, current) {
 async function load() {
   const seq = ++loadSeq;
   el.slip.innerHTML = `<div class="state">Building your slip…</div>`;
-  const params = new URLSearchParams({ continent: el.continent.value, league: el.league.value, ticketType: el.ticketType.value });
+  const params = new URLSearchParams({ continent: el.continent.value, league: el.league.value, ticketType: el.ticketType.value, ai: el.ai.checked ? "1" : "0" });
   try {
     const res = await fetch(`/api/predictions?${params}`);
     const data = await res.json();
@@ -143,12 +149,14 @@ function render(data) {
         <div class="match">${esc(l.match)}</div>
         <div class="meta">${esc(l.league)}${l.continent ? " · " + esc(l.continent) : ""}</div>
         <span class="pick">${esc(l.prediction)}</span>
+        ${l.ai ? `<div class="ai">AI ${Math.round(l.ai.probability * 100)}% · ${esc(l.ai.confidence)}${l.ai.note ? " · " + esc(l.ai.note) : ""}</div>` : ""}
         <div class="odds">${l.odds.toFixed(2)}</div>
       </div>`).join("")}
     <div class="code-slot">
       <div class="label">SportyBet booking code</div>
       <div class="code-box off" id="codeBox">Toggle is off</div>
     </div>
+    ${data.ai && data.ai.error ? `<div class="foot" style="color:var(--warn)">AI unavailable (${esc(data.ai.error)}). Showing the normal slip.</div>` : ""}
     <div class="foot">Target window ${w[0].toFixed(2)}–${w[1].toFixed(2)}. Odds are implied probabilities, not guarantees.</div>`;
 
   if (el.booking.checked) requestCode(legs);
@@ -190,6 +198,7 @@ el.continent.addEventListener("change", () => { el.league.value = "all"; load();
 el.league.addEventListener("change", load);
 el.ticketType.addEventListener("change", load);
 el.booking.addEventListener("change", load);
+el.ai.addEventListener("change", load);
 load();
 </script>
 </body>
